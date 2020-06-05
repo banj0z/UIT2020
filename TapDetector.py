@@ -50,7 +50,7 @@ class TapDetector():
         #FILE READING
         this.wavFile = None
         this.wavFile2 = None
-    
+
     def start(this,seconds):
         print("Recording Started")
         print(not this.clf == None)
@@ -61,13 +61,13 @@ class TapDetector():
                     prediction = this.clf.predict([flat])
                     print(prediction)
         print("Recording Finnished")
-    
+
     def tapDataHandler(this,tap):
         centered = this.centerTap(tap)
         filtered = list(map(lambda x: x if x > 2000 else 1,centered))
         return np.array(this.getFrequency(filtered))
         #return np.abs(np.fft.rfft(filtered))
-    
+
     def centerTap(this,tap):
         return tap
         tap = np.array(tap).tolist()
@@ -146,7 +146,7 @@ class TapDetector():
                                             input = True,
                                             input_device_index = index2,
                                             frames_per_buffer = frames)
-        
+
     def getFrequency(this,data):
         return data
         fft = np.abs(np.fft.rfft(data))
@@ -165,7 +165,7 @@ class TapDetector():
         #plt.show()
         return power
         return 20*np.log10(np.abs(np.fft.rfft(data)))
-    
+
     def record(this):
         tapFound = False
         data,data2 = this.read()
@@ -191,7 +191,7 @@ class TapDetector():
         else:
             this.cooldown -= 1
         return tapFound
-    
+
     def callibrate(this,buttons,tapsNeeded):
         for button in range(0,buttons):
             this.trainingSets.append([])
@@ -216,7 +216,7 @@ class TapDetector():
         for button in range(0,len(this.trainingSets)):
             positiveTrainX.extend([np.array(taps).flatten() for taps in this.trainingSets[button-1]])
             positiveTrainY = np.hstack([positiveTrainY,np.full( len(this.trainingSets[button-1]), button)])
-        
+
     def buttonTraining(this):
         positiveTrainX, positiveTrainY = [], np.array([])
         for button in range(1,len(this.trainingSets)+1):
@@ -263,11 +263,11 @@ class TapDetector():
             this.stream.stop_stream()
             this.stream.close()
             this.audio.terminate()
-    
+
     def plot(this):
         plt.plot(this.getFreqFrames())
         plt.show()
-    
+
     def isTap(this,threshold):
         soundSlice = np.hstack([this.frames[this.currentFrame:],this.frames[:this.currentFrame]])
         freqSlice = this.getFreqFrames()#np.vstack([this.freqFrames[this.currentFrame:],this.freqFrames[:this.currentFrame]])
@@ -286,7 +286,7 @@ class TapDetector():
             this.cooldown = 50#this.tapSize
             return True
         return False
-    
+
     def getFreqFrames(this):
         inOrder = np.vstack([this.freqFrames[this.currentFrame:],this.freqFrames[:this.currentFrame]]).flatten()
         if (index2 != None):
@@ -304,12 +304,12 @@ chunk = 1024//5
 chunk2 = 1024//5
 tapSize = 6
 detector = TapDetector(channels,channels2,rate,index,index2,frames,chunk,tapSize)
-#detector.detectFromFile("test4buttons50training.wav","test4buttons50training.wav")
-detector.callibrate(2,20) # Tabareas, number of taps
-detector.save("test2buttons20trainingsingle.wav", "test2buttons20training2single.wav")
-#detector.detectFromMic(channels,channels2,index,index2,frames)
+detector.detectFromFile("test4buttons50training.wav","test4buttons50training.wav")
+detector.callibrate(4,50) # Tabareas, number of taps
+#detector.save("test2buttons20trainingsingle.wav", "test2buttons20training2single.wav")
+detector.detectFromMic(channels,channels2,index,index2,frames)
 #detector.callibrate(2,2)
-detector.ButtonFreqPrint()
-#detector.start(60)
+#detector.ButtonFreqPrint()
+detector.start(60)
 detector.plot()
 detector.stop()
