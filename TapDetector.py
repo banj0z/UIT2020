@@ -1,30 +1,3 @@
-import pyaudio
-import sys
-import audioop
-import struct
-import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.metrics import confusion_matrix
-from pydub import AudioSegment
-import wave
-from scipy.signal import argrelextrema, gaussian
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
-from sklearn.svm import SVC
-from sklearn.tree import DecisionTreeClassifier
-from scipy import signal as scysig
-from scipy.fft import fftshift
-import matplotlib.pyplot as plt
-from sklearn.model_selection import GridSearchCV
-from sklearn.neural_network import MLPClassifier
-from sklearn.gaussian_process import GaussianProcessClassifier
-from sklearn.gaussian_process.kernels import RBF
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
-from sklearn.naive_bayes import GaussianNB
-from sklearn.metrics import plot_confusion_matrix
-
 class TapDetector():
     def __init__(this,channels,channels2,rate,index,index2,frames,chunk,tapSize):
         this.index2 = index2
@@ -67,23 +40,23 @@ class TapDetector():
         #FILE READING
         this.wavFile = None
         this.wavFile2 = None
-
+    
     def start(this,seconds):
         print("Recording Started")
         print(not this.clf == None)
         for i in range(0,int(this.rate / this.chunk * seconds)):
             if this.record():
                 if not this.clf == None:
-                    flat = this.tapDataHandler(this.getFreqFrames())
+                    flat = this.byteTapDataHandler(this.getFreqFrames())
                     prediction = this.clf.predict([flat])
                     print(prediction)
         print("Recording Finnished")
-
+    
     def stop(this):
         this.stream.stop_stream()
         this.stream.close()
         this.audio.terminate()
-
+        
     def tapDataHandler(this,tap):
         mic1 = tap
         mic2 = None
@@ -92,9 +65,9 @@ class TapDetector():
             mic2 = tap[len(tap)//2:]
         micTrans = this.tapTransform(mic1)
         if not this.index2 == None:
-            micTrans.extend(this.tapTransform(mic2))
+            micTrans.extend(this.tapTransform(mic2))   
         return micTrans
-
+    
     def tapTransform(this,tap):
         filtered = list(map(lambda x: x if x > 2000 or x < -2000 else 1,tap))
         centered = this.centerTap(filtered)
@@ -104,17 +77,17 @@ class TapDetector():
         Sxx = np.reshape(Sxx, (y, x))
         Sxx = np.array([s/max(s) for s in Sxx])
         return Sxx.flatten().tolist()
-
+        
     def byteTapDataHandler(this,tap):
         decoded = this.byteArrayToTap(tap)
         return this.tapDataHandler(decoded)
-
+    
     def byteArrayToTap(this,tapBytes):
         tapArray = []
         for byte in tapBytes:
             tapArray.extend(np.frombuffer(byte, dtype='<i2'))
         return tapArray
-
+    
     def centerTap(this,tap):
         return tap
         tap = np.array(tap).tolist()
@@ -126,8 +99,8 @@ class TapDetector():
         startId += 600
         empty = np.zeros(len(endId)-(endId-startId))
         centered = np.hstack([np.array(tap[startId:]),empty])
-        return centered[:len(centered)-700]
-
+        return centered[:len(centered)-700]    
+    
     def save(this,fileName,fileName2):
         this.saveClip(fileName,this.all)
         this.saveClip(fileName2,this.all2)
@@ -139,7 +112,7 @@ class TapDetector():
         waveFile.setframerate(this.rate)
         waveFile.writeframes(b''.join(clip))
         waveFile.close()
-
+    
     def read(this):
         if this.wavFile == None:
             data =this.stream.read(this.chunk, exception_on_overflow=False)
@@ -153,13 +126,13 @@ class TapDetector():
         if (this.index2 != None):
             res = data, data2
         return res
-
-
+        
+    
     def detectFromFile(this,fileName,fileName2):
         this.wavFile = wave.open(fileName, 'rb')
         if (this.index2 != None):
             this.wavFile2 = wave.open(fileName2, 'rb')
-
+        
     def detectFromMic(this,channels,channels2,index,index2,frames):
         this.wavFile = None
         this.stream = this.audio.open(format = pyaudio.paInt16,
@@ -176,7 +149,7 @@ class TapDetector():
                                             input = True,
                                             input_device_index = index2,
                                             frames_per_buffer = frames)
-
+            
     def record(this):
         tapFound = False
 
@@ -191,7 +164,7 @@ class TapDetector():
             decoded2 = np.frombuffer(data2, dtype='<i2')
             this.all2.append(data2)
             this.freqFrames2[this.currentFrame] = (decoded2)
-
+            
         this.currentFrame = (this.currentFrame+1)%this.tapSize
         if(this.cooldown <= 0):
             tapFound = this.isTap(9000)
@@ -199,7 +172,7 @@ class TapDetector():
         else:
             this.cooldown -= 1
         return tapFound
-
+    
     #Makes the training sets by prompting and recording tap sounds
     def makeTrainingSet(this,buttons,tapsNeeded):
         for button in range(0,buttons):
@@ -209,9 +182,9 @@ class TapDetector():
                 while(not this.record()):
                     d = 1
                 this.trainingSets[button].append(this.getFreqFrames())
-                sys.stdout.write("\r{}/{} taps registered for button {}".format(tap,tapsNeeded,button))
+                sys.stdout.write("\r{}/{} taps registered for button {}".format(tap,tapsNeeded,button+1))
                 sys.stdout.flush()
-
+     
     #Makes the test set by recording taps used for testing
     def makeTestSet(this,buttons,tapsNeeded):
         for button in range(0,buttons):
@@ -223,19 +196,19 @@ class TapDetector():
                 this.testSets[button].append(this.getFreqFrames())
                 sys.stdout.write("\r{}/{} taps registered for button {}".format(tap,tapsNeeded,button))
                 sys.stdout.flush()
-
+    
     #runs the training set against a set of classification algorithms
     #prints out the confusion matrix for the best scoring algorithm
     def runTest(this):
         positiveTrainX, positiveTrainY = [], np.array([])
         for button in range(1,len(this.trainingSets)+1):
-            positiveTrainX.extend([this.byteTapDataHandler(tap) for tap in this.trainingSets[button-1]][:])
-            positiveTrainY = np.hstack([positiveTrainY,np.full( len(this.trainingSets[button-1][:]), button)])
+            positiveTrainX.extend([this.byteTapDataHandler(tap) for tap in this.trainingSets[button-1]][:10])
+            positiveTrainY = np.hstack([positiveTrainY,np.full( len(this.trainingSets[button-1][:10]), button)])
 
         bestScore= 0
         bestClf = None
         clfs = this.clfs
-        for clfId in range(0,len(clfs)):
+        for clfId in [2]: #range(0,len(clfs)):
             name,clf,params = clfs[clfId]
             search = GridSearchCV(clf,params,refit=True)
             search.fit(positiveTrainX,positiveTrainY)
@@ -244,17 +217,17 @@ class TapDetector():
                 bestScore = search.best_score_
                 bestClf = search.best_estimator_
         print("Best clf:{}({})".format(bestClf,bestScore))
-
+                
         this.clf = bestClf
-
+    
     def getConfusionMatrix(this):
         TestX, TestY = [], np.array([])
         for button in range(1,len(this.trainingSets)+1):
             TestX.extend([this.byteTapDataHandler(tap) for tap in this.testSets[button-1]])
             TestY = np.hstack([TestY,np.full( len(this.testSets[button-1]), button)])
-        plot_confusion_matrix(this.clf, TestX, TestY,cmap=plt.cm.Yellows,normalize='true')
+        plot_confusion_matrix(this.clf, TestX, TestY,cmap=plt.cm.Reds,normalize='true')
         plt.show()
-
+        
     # Trains the classifier with the trainings set
     def fit(this):
         positiveTrainX, positiveTrainY = [], np.array([])
@@ -294,12 +267,12 @@ class TapDetector():
             freqs = (np.linspace(0, this.rate, len(avgTap)//2+1))
             plt.plot(freqs,power)
             plt.show()
-        print(len(plots))
+        print(len(plots))    
         plt.plot(np.linspace(0, this.rate, len(avgTap)//2+1),plots[0]-plots[3])
         plt.show()
         plt.plot(gaussian(100,2.5))
         plt.show()
-
+    
     def isTap(this,threshold):
         soundSlice = np.hstack([this.frames[this.currentFrame:],this.frames[:this.currentFrame]])
         diff = np.diff(soundSlice)
@@ -316,13 +289,13 @@ class TapDetector():
             this.cooldown = this.tapSize
             return True
         return False
-
+    
     def getFreqFrames(this):
         inOrder = this.all[len(this.all)-this.tapSize:]
         if (this.index2 != None):
             inOrder.extend(this.all2[len(this.all2)-this.tapSize:])
         return inOrder
-
+                      
 channels =1
 rate = 44100
 index = 1
